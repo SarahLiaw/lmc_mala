@@ -3,7 +3,7 @@ import yaml
 from argparse import ArgumentParser
 from tqdm import tqdm
 import random
-
+import uuid
 import torch
 import multiprocessing as mp
 from torch.utils.data import DataLoader
@@ -25,15 +25,22 @@ def run(config, args):
     print(f'Random seed: {seed}')
     torch.manual_seed(seed)
     if args.log and wandb:
+        run_id = str(uuid.uuid4())  
+        with open("run_id.txt", "w") as f:
+            f.write(run_id)
+        # # Later
+        # with open("run_id.txt", "r") as f:
+        #     run_id = f.read().strip()
         group = config['group'] if 'group' in config else None
         name = f"{config['data_name']}_{config['algo']}_seed{seed}_{datetime.now().strftime('%m%d_%H%M')}"
 
         # put algo name, seed and data_name
         run = wandb.init(
             project=config['project'],
+            id=run_id,
             group=group,
             name=name,
-            config=config)
+            config=config, resume="allow")
         config = wandb.config
     print('Start running...')
     # Parse configuration

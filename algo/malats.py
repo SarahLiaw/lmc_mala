@@ -50,6 +50,3 @@ class MALATS(LMCTS):
         )
 
     # ------------------------------------------------------------------
-    @property
-    def name(self) -> str:
-        return "MALATS"
