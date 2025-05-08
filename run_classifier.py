@@ -26,10 +26,12 @@ def run(config, args):
     torch.manual_seed(seed)
     if args.log and wandb:
         group = config['group'] if 'group' in config else None
+        name = f'{config['data_name']}_{config['algo']}_seed{seed}_{datetime.now().strftime("%m%d_%H%M")}'
+        # put algo name, seed and data_name
         run = wandb.init(
-            entity='hzzheng',
             project=config['project'],
             group=group,
+            name=name,
             config=config)
         config = wandb.config
     print('Start running...')

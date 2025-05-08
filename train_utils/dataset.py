@@ -87,28 +87,79 @@ class AutoUCI(Dataset):
 
     def __len__(self):
         return self.label.shape[0]
-
+    
     def loaddata(self, name, version, num_data):
-        cxt, label = fetch_openml(name=name, version=version, data_home='data', return_X_y=True)
+        # ─── special case: Adult has string features ───
+        if name == 'adult':
+            # fetch raw from OpenML
+            cxt_df, label_ser = fetch_openml(
+                name=name,
+                version=version,
+                data_home='data',
+                return_X_y=True
+            )
+            cxt_df = cxt_df.replace('?', pd.NA).dropna()
+            label_ser = label_ser[cxt_df.index]
 
+            feat_enc = OrdinalEncoder(dtype=np.float32)
+            context = feat_enc.fit_transform(cxt_df)
+
+            lab_enc = OrdinalEncoder(dtype=int)
+            label = lab_enc.fit_transform(
+                label_ser.to_numpy().reshape(-1, 1)
+            ).ravel().astype(int)
+
+            if num_data:
+                context = context[:num_data]
+                label = label[:num_data]
+
+            context = context / np.linalg.norm(context, axis=1, keepdims=True)
+            self.context = torch.from_numpy(context)
+            self.label = label
+            return
+        cxt, label = fetch_openml(
+            name=name,
+            version=version,
+            data_home='data',
+            return_X_y=True
+        )
         context = np.array(cxt).astype(np.float32)
         if num_data:
             label = label[0:num_data]
             context = context[0:num_data, :]
-        # encode label
         if name not in continuous_dataset:
             encoder = OrdinalEncoder(dtype=int)
             label = encoder.fit_transform(label.reshape((-1, 1)))
-
-            # Drop rows that contain Nan
             raw = np.concatenate([context, label], axis=1)
             raw = remove_nan(raw)
             self.label = raw[:, -1]
             context = raw[:, :-1]
         else:
             self.label = np.array(label).astype(int) - 1
-        self.context = context / np.linalg.norm(context, axis=1, keepdims=True)
-        self.context = torch.tensor(self.context)
+        context = context / np.linalg.norm(context, axis=1, keepdims=True)
+        self.context = torch.tensor(context)
+
+    # def loaddata(self, name, version, num_data):
+    #     cxt, label = fetch_openml(name=name, version=version, data_home='data', return_X_y=True)
+
+    #     context = np.array(cxt).astype(np.float32)
+    #     if num_data:
+    #         label = label[0:num_data]
+    #         context = context[0:num_data, :]
+    #     # encode label
+    #     if name not in continuous_dataset:
+    #         encoder = OrdinalEncoder(dtype=int)
+    #         label = encoder.fit_transform(label.reshape((-1, 1)))
+
+    #         # Drop rows that contain Nan
+    #         raw = np.concatenate([context, label], axis=1)
+    #         raw = remove_nan(raw)
+    #         self.label = raw[:, -1]
+    #         context = raw[:, :-1]
+    #     else:
+    #         self.label = np.array(label).astype(int) - 1
+    #     self.context = context / np.linalg.norm(context, axis=1, keepdims=True)
+    #     self.context = torch.tensor(self.context)
 
 
 class Collector(Dataset):

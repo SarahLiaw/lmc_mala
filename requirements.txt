@@ -1,6 +1,6 @@
 torch
 wandb
 numpy
-scikit-learn==0.21.3
+scikit-learn
 pandas
 PyYAML

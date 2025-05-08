@@ -3,7 +3,7 @@ from torch.optim import SGD
 
 from algo import LMCTS, LinTS, LinUCB, \
     EpsGreedy, NeuralTS, NeuralUCB, NeuralEpsGreedy, \
-    UCBGLM, GLMTSL, NeuralLinUCB
+    UCBGLM, GLMTSL, NeuralLinUCB, MALATS
 from algo.langevin import LangevinMC
 from models.classifier import LinearNet, FCN
 from models.conv import MiniCNN, MiniConv
@@ -63,6 +63,35 @@ def construct_agent_cls(config, device):
                       reduce=reduce,
                       decay_step=decay,
                       device=device)
+        
+        
+        #### MALATS
+    
+    elif algo_name == "MALATS":
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        print(f'Beta inverse: {beta_inv}')
+
+        # create optimizer
+        optimizer = LangevinMC(model.parameters(), lr=config['lr'],
+                               beta_inv=beta_inv, weight_decay=2.0)
+        # Define loss function
+        if 'loss' not in config:
+            criterion = construct_loss('L2', reduction='sum')
+        else:
+            criterion = construct_loss(config['loss'], reduction='sum')
+
+        collector = Collector()
+        
+        agent = LMCTS(model, optimizer, criterion,
+                      collector,
+                      name='MALATS',
+                      batch_size=batchsize,
+                      decay_step=decay,
+                      device=device)
+
+    ####
+    
+    
     elif algo_name == 'EpsGreedy':
         agent = EpsGreedy(num_arm, config['eps'])
     elif algo_name == 'NeuralTS':
@@ -151,6 +180,8 @@ def construct_agent_sim(config, device):
     elif algo_name == 'LinUCB':
         nu = config['nu'] * np.sqrt(dim_context * np.log(T))
         agent = LinUCB(num_arm, dim_context, nu, reg=1.0, device=device)
+        
+    #### LMCTS    
     elif algo_name == 'LMCTS':
         beta_inv = config['beta_inv'] * dim_context * np.log(T)
         print(f'Beta inverse: {beta_inv}')
@@ -170,6 +201,33 @@ def construct_agent_sim(config, device):
                       batch_size=batchsize,
                       decay_step=decay,
                       device=device)
+        
+    #### MALATS
+    
+    elif algo_name == "MALATS":
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        print(f'Beta inverse: {beta_inv}')
+
+        # create optimizer
+        optimizer = LangevinMC(model.parameters(), lr=config['lr'],
+                               beta_inv=beta_inv, weight_decay=2.0)
+        # Define loss function
+        if 'loss' not in config:
+            criterion = construct_loss('L2', reduction='sum')
+        else:
+            criterion = construct_loss(config['loss'], reduction='sum')
+
+        collector = Collector()
+        
+        agent = LMCTS(model, optimizer, criterion,
+                      collector,
+                      name='MALATS',
+                      batch_size=batchsize,
+                      decay_step=decay,
+                      device=device)
+
+    ####
+        
     elif algo_name == 'EpsGreedy':
         agent = EpsGreedy(num_arm, config['eps'])
     elif algo_name == 'NeuralTS':
@@ -272,6 +330,32 @@ def construct_agent_image(config, device):
                       reduce=5,
                       decay_step=decay,
                       device=device)
+        
+        #### MALATS
+    
+    elif algo_name == "MALATS":
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        model = MiniCNN(in_channel=3 * num_arm).to(device)
+        optimizer = LangevinMC(model.parameters(), lr=config['lr'],
+                               beta_inv=beta_inv, weight_decay=2.0)
+        # Define loss function
+        if 'loss' not in config:
+            criterion = construct_loss('L2', reduction='sum')
+        else:
+            criterion = construct_loss(config['loss'], reduction='sum')
+
+        collector = Collector()
+        
+        agent = LMCTS(model, optimizer, criterion,
+                      collector,
+                      name='MALATS',
+                      batch_size=batchsize,
+                      reduce=5,
+                      decay_step=decay,
+                      device=device)
+    ####
+    
+    
     elif algo_name == 'NeuralTS':
         model = MiniCNN(in_channel=3 * num_arm).to(device)
         optimizer = SGD(model.parameters(), lr=config['lr'], weight_decay=config['reg'])

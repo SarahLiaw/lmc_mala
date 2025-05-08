@@ -37,7 +37,6 @@ def run(config, args):
     if args.log and wandb:
         group = config['group'] if 'group' in config else None
         run = wandb.init(
-            entity='hzzheng',
             project=config['project'],
             group=group,
             config=config)
