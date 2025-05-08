@@ -10,13 +10,20 @@ T: 10000
 # train
 algo: MALATS
 model: neural
-act: ReLU
+act: LeakyReLU
 layers: [100]
-reduce: 2
+
+batchsize : 256
+reduce : 2
+decay_step : 1000
+loss : L2
+
 num_iter: 100
-eps: 0.01
-beta_inv: 1.0
-lr: 0.01
+beta_inv: 0.00001
+lr: 0.005
+mala_step_size : 0.005
+mala_n_steps : 10
+mala_lazy : true
 
 # log
 project: ContextualBandit-ICML

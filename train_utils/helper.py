@@ -3,7 +3,7 @@ from torch.optim import SGD
 
 from algo import LMCTS, LinTS, LinUCB, \
     EpsGreedy, NeuralTS, NeuralUCB, NeuralEpsGreedy, \
-    UCBGLM, GLMTSL, NeuralLinUCB, MALATS
+    UCBGLM, GLMTSL, NeuralLinUCB, MALATS, FGLMCTS, FGMALATS, SFGMALATS
 from algo.langevin import LangevinMC
 from models.classifier import LinearNet, FCN
 from models.conv import MiniCNN, MiniConv
@@ -67,11 +67,33 @@ def construct_agent_cls(config, device):
         
         #### MALATS
     
-    elif algo_name == "MALATS":
-        beta_inv = config['beta_inv'] * dim_context * np.log(T)
-        print(f'Beta inverse: {beta_inv}')
+    # elif algo_name == "MALATS":
+    #     beta_inv = config['beta_inv'] * dim_context * np.log(T)
+    #     print(f'Beta inverse: {beta_inv}')
 
-        # create optimizer
+    #     # create optimizer
+    #     optimizer = LangevinMC(model.parameters(), lr=config['lr'],
+    #                            beta_inv=beta_inv, weight_decay=2.0)
+    #     # Define loss function
+    #     if 'loss' not in config:
+    #         criterion = construct_loss('L2', reduction='sum')
+    #     else:
+    #         criterion = construct_loss(config['loss'], reduction='sum')
+
+    #     collector = Collector()
+        
+    #     agent = LMCTS(model, optimizer, criterion,
+    #                   collector,
+    #                   name='MALATS',
+    #                   batch_size=batchsize,
+    #                   decay_step=decay,
+    #                   device=device)
+
+    ####
+
+    elif algo_name == 'FGLMCTS':
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        # create Lagevine Monte Carol optimizer
         optimizer = LangevinMC(model.parameters(), lr=config['lr'],
                                beta_inv=beta_inv, weight_decay=2.0)
         # Define loss function
@@ -81,16 +103,101 @@ def construct_agent_cls(config, device):
             criterion = construct_loss(config['loss'], reduction='sum')
 
         collector = Collector()
-        
-        agent = LMCTS(model, optimizer, criterion,
+        agent = FGLMCTS(model, optimizer, criterion,
                       collector,
-                      name='MALATS',
+                      name='FGLMCTS',
                       batch_size=batchsize,
+                      reduce=reduce,
                       decay_step=decay,
                       device=device)
+    ####
+    elif algo_name == 'MALATS':
+        # compute temperature
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        # build the Langevin optimizer
+        optimizer = LangevinMC(
+            model.parameters(),
+            lr=config['lr'],
+            beta_inv=beta_inv,
+            weight_decay=2.0
+        )
+        # loss
+        if 'loss' not in config:
+            criterion = construct_loss('L2', reduction='sum')
+        else:
+            criterion = construct_loss(config['loss'], reduction='sum')
+        # data collector
+        collector = Collector()
+        # instantiate MALATS
+        agent = MALATS(
+            model,
+            optimizer,
+            criterion,
+            collector,
+            batch_size=batchsize,
+            reduce=reduce,
+            decay_step=decay,
+            mala_step_size = config.get('mala_step_size', 1e-3),
+            mala_n_steps = config.get('mala_n_steps', 10),
+            mala_lazy = config.get('mala_lazy', True),
+            device=device
+        )
+    ####
+
+    elif algo_name == "FGMALATS":
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        optimizer = LangevinMC(
+            model.parameters(),
+            lr=config['lr'],
+            beta_inv=beta_inv,
+            weight_decay=2.0
+        )
+
+        if 'loss' not in config:
+            criterion = construct_loss('L2', reduction='sum')
+        else:
+            criterion = construct_loss(config['loss'], reduction='sum')
+
+        collector = Collector()
+        agent = FGMALATS(
+            model, optimizer, criterion, collector,
+            feel_good=True,
+            fg_mode="hard",
+            lambda_fg=config.get('lambda_fg', 1.0),
+            b_fg=config.get('b_fg', 1.0),
+            batch_size=batchsize,
+            decay_step=decay,
+            device=device
+        )
+
+    elif algo_name == "SFGMALATS":
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        optimizer = LangevinMC(
+            model.parameters(),
+            lr=config['lr'],
+            beta_inv=beta_inv,
+            weight_decay=2.0
+        )
+
+        if 'loss' not in config:
+            criterion = construct_loss('L2', reduction='sum')
+        else:
+            criterion = construct_loss(config['loss'], reduction='sum')
+
+        collector = Collector()
+        agent = SFGMALATS(
+            model, optimizer, criterion, collector,
+            feel_good=True,
+            fg_mode="smooth",
+            lambda_fg=config.get('lambda_fg', 1.0),
+            b_fg=config.get('b_fg', 1.0),
+            smooth_s=config.get('smooth_s', 10.0),
+            batch_size=batchsize,
+            decay_step=decay,
+            device=device
+        )
 
     ####
-    
     
     elif algo_name == 'EpsGreedy':
         agent = EpsGreedy(num_arm, config['eps'])
@@ -425,6 +532,31 @@ def construct_agent_image(config, device):
                              reduce=10,
                              reg=config['reg'],
                              device=device)
+
+    elif algo_name == 'FGMALATS':
+        beta_inv = config['beta_inv'] * dim_context * np.log(T)
+        optimizer = LangevinMC(model.parameters(),
+                            lr=config['lr'],
+                            beta_inv=beta_inv,
+                            weight_decay=2.0)
+        criterion = construct_loss(config.get('loss', 'L2'), reduction='sum')
+        collector = Collector()
+
+        agent = FGMALATS(
+            model, optimizer, criterion, collector,
+            batch_size=batchsize,
+            reduce=reduce,
+            decay_step=decay,
+            device=device,
+            beta_inv=beta_inv,
+            accept_reject_step=config.get('accept_reject_step', 0),
+            feel_good=config.get('feel_good', False),
+            fg_mode=config.get('fg_mode', 'hard'),
+            lambda_fg=config.get('lambda_fg', 0.0),
+            b_fg=config.get('b_fg', 1.0),
+            smooth_s=config.get('smooth_s', 10.0)
+        )
+
 
     else:
         raise ValueError(f'Invalid algo name {algo_name}')

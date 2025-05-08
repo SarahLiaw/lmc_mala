@@ -7,17 +7,17 @@ import random
 import torch
 import multiprocessing as mp
 from torch.utils.data import DataLoader
-
+from datetime import datetime
 from torch.profiler import profile, record_function, ProfilerActivity
 
 from train_utils.helper import construct_agent_cls
 from train_utils.dataset import UCI, AutoUCI, sample_data
 
-try:
-    import wandb
-except ImportError:
-    wandb = None
-
+# try:
+#     import wandb
+# except ImportError:
+#     wandb = None
+import wandb
 
 def run(config, args):
     seed = random.randint(1, 10000)
@@ -26,7 +26,8 @@ def run(config, args):
     torch.manual_seed(seed)
     if args.log and wandb:
         group = config['group'] if 'group' in config else None
-        name = f'{config['data_name']}_{config['algo']}_seed{seed}_{datetime.now().strftime("%m%d_%H%M")}'
+        name = f"{config['data_name']}_{config['algo']}_seed{seed}_{datetime.now().strftime('%m%d_%H%M')}"
+
         # put algo name, seed and data_name
         run = wandb.init(
             project=config['project'],

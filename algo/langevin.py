@@ -5,6 +5,8 @@ from torch.optim import Optimizer
 from torch import Tensor
 from typing import List
 
+from torch.distributions.multivariate_normal import MultivariateNormal
+from torch.distributions.uniform import Uniform
 
 def lmc(params: List[Tensor],
         d_p_list: List[Tensor],
@@ -80,3 +82,69 @@ class LangevinMC(Optimizer):
                     d_p_list.append(delta_p)
                     # p.add_(delta_p)
             lmc(params_with_grad, d_p_list, weight_decay, lr)
+
+
+
+@torch.no_grad()
+def mala_sampling(
+    init_theta: torch.Tensor,
+    logp_fn,                        # callable returning log-posterior, gradients must be enabled
+    step_size: float,
+    beta_inv: float,
+    n_steps: int,
+    lazy: bool = True,
+):
+    """
+    Metropolis-Adjusted Langevin Algorithm (1/2-lazy version).
+    Parameters
+    ----------
+    init_theta  : starting position      (torch.Tensor,   requires_grad = False)
+    logp_fn     : lambda θ → log π(θ)    (callable)
+    step_size   : γ in the paper         (float)
+    beta_inv    : 1/β  (noise scale)     (float)
+    n_steps     : number of MALA moves   (int)
+    lazy        : prepend a 'stay-put'   (bool)
+    Returns
+    -------
+    theta  : last accepted sample (torch.Tensor, detached, CPU stays CPU / GPU stays GPU)
+    """
+
+    theta = init_theta.clone().detach()
+    # Convenient wrappers
+    normal = MultivariateNormal(torch.zeros_like(theta), torch.eye(theta.numel(), device=theta.device))
+    unif   = Uniform(torch.tensor(0., device=theta.device), torch.tensor(1., device=theta.device))
+
+    for k in range(n_steps):
+        # ---------- proposal (Euler–Maruyama) ----------
+        theta.requires_grad_(True)
+        logp = logp_fn(theta)
+        grad = torch.autograd.grad(logp, theta)[0]
+        theta.requires_grad_(False)
+
+        noise = torch.sqrt(torch.tensor(2.*step_size*beta_inv, device=theta.device))*normal.sample()
+        prop  = theta + step_size * grad + noise
+
+        # ---------- accept / reject ----------
+        # forward transition density q(θ→θ')
+        def _log_q(x_from, x_to, grad_from):
+            diff = x_to - (x_from + step_size*grad_from)
+            return - diff.pow(2).sum() / (4.*step_size*beta_inv)
+
+        prop.requires_grad_(True)
+        logp_prop = logp_fn(prop)
+        grad_prop = torch.autograd.grad(logp_prop, prop)[0]
+        prop.requires_grad_(False)
+
+        log_alpha = (
+            logp_prop
+            + _log_q(prop, theta, grad_prop)
+            - logp
+            - _log_q(theta, prop, grad)
+        )
+        if lazy:
+            log_alpha = torch.logaddexp(torch.log(torch.tensor(0.5, device=theta.device)), log_alpha)  # 1/2-lazy
+
+        if torch.log(unif.sample()) < log_alpha:
+            theta = prop.detach()
+
+    return theta
