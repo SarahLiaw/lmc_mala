@@ -129,8 +129,12 @@ class AutoUCI(Dataset):
             context = context[0:num_data, :]
         if name not in continuous_dataset:
             encoder = OrdinalEncoder(dtype=int)
-            label = encoder.fit_transform(label.reshape((-1, 1)))
-            raw = np.concatenate([context, label], axis=1)
+          #  label = encoder.fit_transform(label.reshape((-1, 1)))
+            label = encoder.fit_transform(label.to_numpy().reshape(-1, 1)).ravel().astype(int)
+
+            #raw = np.concatenate([context, label], axis=1)
+            raw = np.concatenate([context, label.reshape(-1, 1)], axis=1)
+
             raw = remove_nan(raw)
             self.label = raw[:, -1]
             context = raw[:, :-1]
