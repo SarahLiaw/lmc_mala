@@ -1,0 +1,28 @@
+data_name: covertype
+version: 3
+num_data: 15000
+
+# bandit
+num_arm: 7
+dim_context: 54
+T: 15000
+
+# train
+algo: FGLMCTS
+model: neural
+act: LeakyReLU
+layers: [100]
+loss: BCE
+num_iter: 100
+beta_inv: 0.000001
+lr: 0.01
+
+feel_good: true            # turn it on
+fg_mode: smooth              # "hard" or "smooth"
+lambda_fg: 0.1
+b_fg: 10
+smooth_s: 10
+
+# log
+project: ContextualBandit-ICML
+group: Covertype-SFGLMCTS
